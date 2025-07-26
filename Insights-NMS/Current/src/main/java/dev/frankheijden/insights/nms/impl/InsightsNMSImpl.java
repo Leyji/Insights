@@ -4,6 +4,8 @@ import ca.spottedleaf.concurrentutil.util.Priority;
 import ca.spottedleaf.moonrise.patches.chunk_system.io.MoonriseRegionFileIO;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.DataResult;
+import dev.frankheijden.insights.api.InsightsPlugin;
+import dev.frankheijden.insights.api.utils.SchedulingUtils;
 import dev.frankheijden.insights.nms.core.ChunkEntity;
 import dev.frankheijden.insights.nms.core.ChunkSection;
 import dev.frankheijden.insights.nms.core.InsightsNMS;
@@ -55,23 +57,43 @@ public class InsightsNMSImpl extends InsightsNMS {
         if (tagOptional.isEmpty()) return;
         CompoundTag tag = tagOptional.get();
 
-        ListTag sectionsTagList = tag.getList("sections", Tag.TAG_COMPOUND);
+        Optional<ListTag> optionalSectionsTagList = tag.getList("sections");
+        if (optionalSectionsTagList.isEmpty()) {
+            logger.severe(String.format(
+                    CHUNK_ERROR,
+                    chunkX,
+                    0,
+                    chunkZ,
+                    "Sections tag is missing"
+            ));
+            return;
+        }
+        ListTag sectionsTagList = optionalSectionsTagList.get();
 
         DataResult<PalettedContainer<BlockState>> dataResult;
         int nonNullSectionCount = 0;
         for (int i = 0; i < sectionsTagList.size(); i++) {
-            CompoundTag sectionTag = sectionsTagList.getCompound(i);
-            var chunkSectionPart = sectionTag.getByte("Y");
+            Optional<CompoundTag> optionalSectionTag = sectionsTagList.getCompound(i);
+            if (optionalSectionTag.isEmpty()) {
+                logger.severe(String.format(
+                        CHUNK_ERROR,
+                        chunkX,
+                        i,
+                        chunkZ,
+                        "Section tag is missing"
+                ));
+                continue;
+            }
+            CompoundTag sectionTag = optionalSectionTag.get();
+            var chunkSectionPart = sectionTag.getByte("Y").orElseThrow();
             var sectionIndex = serverLevel.getSectionIndexFromSectionY(chunkSectionPart);
             if (sectionIndex < 0 || sectionIndex >= sectionsCount) continue;
 
             PalettedContainer<BlockState> blockStateContainer;
-            if (sectionTag.contains("block_states", Tag.TAG_COMPOUND)) {
+            if (sectionTag.contains("block_states")) {
                 Codec<PalettedContainer<BlockState>> blockStateCodec = SerializableChunkData.BLOCK_STATE_CODEC;
-                dataResult = blockStateCodec.parse(
-                        NbtOps.INSTANCE,
-                        sectionTag.getCompound("block_states")
-                ).promotePartial(message -> logger.severe(String.format(
+                dataResult = blockStateCodec.parse(NbtOps.INSTANCE, sectionTag.getCompound("block_states").orElseThrow())
+                        .promotePartial(message -> logger.severe(String.format(
                         CHUNK_ERROR,
                         chunkX,
                         chunkSectionPart,
@@ -106,15 +128,20 @@ public class InsightsNMSImpl extends InsightsNMS {
 
     @Override
     public void getLoadedChunkEntities(Chunk chunk, Consumer<ChunkEntity> entityConsumer) {
-        for (org.bukkit.entity.Entity bukkitEntity : chunk.getEntities()) {
-            Entity entity = ((CraftEntity) bukkitEntity).getHandle();
-            entityConsumer.accept(new ChunkEntity(
-                    bukkitEntity.getType(),
-                    entity.getBlockX(),
-                    entity.getBlockY(),
-                    entity.getBlockZ()
-            ));
-        }
+        var plugin = InsightsPlugin.getInstance();
+        SchedulingUtils.runImmediatelyAtChunkIfFolia(plugin, chunk.getWorld(), chunk.getX(), chunk.getZ(), () -> {
+            for (org.bukkit.entity.Entity bukkitEntity : chunk.getEntities()) {
+                SchedulingUtils.runImmediatelyAtEntityIfFolia(plugin, bukkitEntity, () -> {
+                    Entity entity = ((CraftEntity) bukkitEntity).getHandle();
+                    entityConsumer.accept(new ChunkEntity(
+                            bukkitEntity.getType(),
+                            entity.getBlockX(),
+                            entity.getBlockY(),
+                            entity.getBlockZ()
+                    ));
+                });
+            }
+        });
     }
 
     @Override
@@ -134,7 +161,7 @@ public class InsightsNMSImpl extends InsightsNMS {
         );
         if (tag == null) return;
 
-        readChunkEntities(tag.getList("Entities", Tag.TAG_COMPOUND), entityConsumer);
+        readChunkEntities(tag.getList("Entities").orElseThrow(), entityConsumer);
     }
 
     private void readChunkEntities(ListTag listTag, Consumer<ChunkEntity> entityConsumer) {
@@ -144,20 +171,20 @@ public class InsightsNMSImpl extends InsightsNMS {
     }
 
     private void readChunkEntities(CompoundTag nbt, Consumer<ChunkEntity> entityConsumer) {
-        var typeOptional = net.minecraft.world.entity.EntityType.by(nbt);
+        var typeOptional = net.minecraft.world.entity.EntityType.byString(nbt.getString("id").orElseThrow());
         if (typeOptional.isPresent()) {
             String entityTypeName = net.minecraft.world.entity.EntityType.getKey(typeOptional.get()).getPath();
-            ListTag posList = nbt.getList("Pos", Tag.TAG_DOUBLE);
+            ListTag posList = nbt.getList("Pos").orElseThrow();
             entityConsumer.accept(new ChunkEntity(
                     EntityType.fromName(entityTypeName),
-                    Mth.floor(Mth.clamp(posList.getDouble(0), -3E7D, 3E7D)),
-                    Mth.floor(Mth.clamp(posList.getDouble(1), -2E7D, 2E7D)),
-                    Mth.floor(Mth.clamp(posList.getDouble(2), -3E7D, 3E7D))
+                    Mth.floor(Mth.clamp(posList.getDouble(0).orElseThrow(), -3E7D, 3E7D)),
+                    Mth.floor(Mth.clamp(posList.getDouble(1).orElseThrow(), -2E7D, 2E7D)),
+                    Mth.floor(Mth.clamp(posList.getDouble(2).orElseThrow(), -3E7D, 3E7D))
             ));
         }
 
-        if (nbt.contains("Passengers", Tag.TAG_LIST)) {
-            readChunkEntities(nbt.getList("Passengers", Tag.TAG_COMPOUND), entityConsumer);
+        if (nbt.contains("Passengers")) {
+            readChunkEntities(nbt.getList("Passengers").orElseThrow(), entityConsumer);
         }
     }
 

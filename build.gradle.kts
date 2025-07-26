@@ -12,7 +12,7 @@ plugins {
 val name = "Insights"
 group = "dev.frankheijden.insights"
 val dependencyDir = "$group.dependencies"
-version = "6.19.3"
+version = "6.19.4"
 
 subprojects {
     apply(plugin = "java")
@@ -42,11 +42,12 @@ subprojects {
 
     repositories {
         mavenCentral()
+        maven("https://repo.papermc.io/repository/maven-snapshots/")
+        maven("https://repo.papermc.io/repository/maven-public/")
+        maven("https://s01.oss.sonatype.org/content/repositories/snapshots/")
+        maven("https://oss.sonatype.org/content/repositories/snapshots/")
         maven("https://jitpack.io")
         maven("https://repo.codemc.io/repository/maven-public")
-        maven("https://oss.sonatype.org/content/repositories/snapshots/")
-        maven("https://s01.oss.sonatype.org/content/repositories/snapshots/")
-        maven("https://papermc.io/repo/repository/maven-public/")
         maven("https://libraries.minecraft.net")
     }
 

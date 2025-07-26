@@ -11,12 +11,12 @@ import org.jetbrains.annotations.Nullable;
 
 public class CommandSenderMapper implements SenderMapper<CommandSourceStack, CommandSender> {
     @Override
-    public CommandSender map(CommandSourceStack source) {
+    public @NotNull CommandSender map(CommandSourceStack source) {
         return source.getSender();
     }
 
     @Override
-    public CommandSourceStack reverse(CommandSender sender) {
+    public @NotNull CommandSourceStack reverse(@NotNull CommandSender sender) {
         return new CommandSourceStack() {
             @Override
             public @NotNull Location getLocation() {
@@ -25,7 +25,7 @@ public class CommandSenderMapper implements SenderMapper<CommandSourceStack, Com
                 }
 
                 var worlds = Bukkit.getWorlds();
-                return new Location(worlds.isEmpty() ? null : worlds.getFirst(), 0, 0, 0); // Best effort lol
+                return new Location(worlds.isEmpty() ? null : worlds.getFirst(), 0, 0, 0);
             }
 
             @Override
@@ -36,6 +36,16 @@ public class CommandSenderMapper implements SenderMapper<CommandSourceStack, Com
             @Override
             public @Nullable Entity getExecutor() {
                 return sender instanceof Entity entity ? entity : null;
+            }
+
+            @Override
+            public @NotNull CommandSourceStack withLocation(@NotNull Location location) {
+                return this;
+            }
+
+            @Override
+            public @NotNull CommandSourceStack withExecutor(@Nullable Entity executor) {
+                return this;
             }
         };
     }
