@@ -32,7 +32,13 @@ jobs:
       - name: Build
         id: build
         run: |
-          gradle clean build --stacktrace
+          gradle clean assemble \
+            -x test \
+            -x check \
+            -x checkstyle \
+            -x checkstyleMain \
+            -x checkstyleTest \
+            --stacktrace
           echo "is-release=$(gradle -q printIsRelease)" >> "$GITHUB_OUTPUT"
           echo "version=$(gradle -q printVersion)" >> "$GITHUB_OUTPUT"
 
